@@ -154,8 +154,9 @@ export default {
 
       try {
         if (this.isEdit) {
+         formData.append("_method", "put");
           console.log('Sending PUT request to:', `/admin/products/${this.form.id}`);
-          const response = await axios.put(`/admin/products/${this.form.id}`, formData, {
+          const response = await axios.post(`/admin/products/${this.form.id}`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
           console.log('PUT response:', response);
@@ -302,6 +303,7 @@ export default {
 }
 
 /* Modal Styles */
+/* Modal Styles */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -319,6 +321,8 @@ export default {
   padding: 20px;
   border-radius: 8px;
   width: 500px;
+  max-height: 80vh; /* Limit the maximum height */
+  overflow-y: auto; /* Enable vertical scrolling if content exceeds max height */
 }
 
 .modal-form {
@@ -356,4 +360,5 @@ export default {
   width: 150px;
   height: auto;
 }
+
 </style>
