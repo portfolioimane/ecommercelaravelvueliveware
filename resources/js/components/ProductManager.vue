@@ -2,7 +2,7 @@
   <div class="product-manager">
     <h1 class="title">Product Management</h1>
     <div class="actions">
-      <button class="btn btn-primary" @click="showCreateModal = true">Add New Product</button>
+      <button class="btn btn-primary" @click="showCreateProduct">Add New Product</button>
     </div>
     <table class="product-table">
       <thead>
@@ -12,6 +12,7 @@
           <th>Price</th>
           <th>Stock</th>
           <th>Category</th>
+          <th>Image</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -22,6 +23,9 @@
           <td>{{ product.price | currency }}</td>
           <td>{{ product.stock }}</td>
           <td>{{ product.category.name }}</td>
+          <td>
+            <img :src="product.image ? '/storage/images/' + product.image : '/path/to/default/image.png'" alt="Product Image" class="product-image"/>
+          </td>
           <td>
             <button class="btn btn-edit" @click="editProduct(product.id)">Edit</button>
             <button class="btn btn-delete" @click="deleteProduct(product.id)">Delete</button>
@@ -34,20 +38,41 @@
     <div v-if="showCreateModal || showEditModal" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
         <h2>{{ isEdit ? 'Edit Product' : 'Create Product' }}</h2>
-        <form @submit.prevent="submitForm" class="modal-form">
-          <input v-model="form.name" placeholder="Name" required>
-          <textarea v-model="form.description" placeholder="Description" required></textarea>
-          <input v-model="form.price" type="number" placeholder="Price" required>
-          <input v-model="form.stock" type="number" placeholder="Stock" required>
-          <input v-model="form.image" type="text" placeholder="Image URL" required>
-          <select v-model="form.category_id" required>
-            <option v-for="category in categories" :key="category.id" :value="category.id">
-              {{ category.name }}
-            </option>
-          </select>
+        <form @submit.prevent="submitForm" class="modal-form" enctype="multipart/form-data">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input id="name" v-model="form.name" placeholder="Name" required>
+          </div>
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" v-model="form.description" placeholder="Description" required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="price">Price</label>
+            <input id="price" v-model="form.price" type="number" step="0.01" placeholder="Price" required>
+          </div>
+          <div class="form-group">
+            <label for="stock">Stock</label>
+            <input id="stock" v-model.number="form.stock" type="number" placeholder="Stock" required>
+          </div>
+          <div class="form-group">
+            <label for="image">Image</label>
+            <input id="image" type="file" @change="handleFileUpload">
+            <div v-if="imagePreview">
+              <img :src="imagePreview" alt="Image Preview" class="product-image-preview"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="category">Category</label>
+            <select id="category" v-model="form.category_id" required>
+              <option v-for="category in categories" :key="category.id" :value="category.id">
+                {{ category.name }}
+              </option>
+            </select>
+          </div>
           <div class="modal-buttons">
             <button type="submit" class="btn btn-primary">{{ isEdit ? 'Update' : 'Create' }}</button>
-            <button type="button" class="btn btn-secondary" @click="closeModal">Cancel</button>
+            <button type="button" class="btn btn-cancel" @click="closeModal">Cancel</button>
           </div>
         </form>
       </div>
@@ -56,6 +81,8 @@
 </template>
 
 <script>
+import axios from 'axios';
+
 export default {
   data() {
     return {
@@ -68,21 +95,33 @@ export default {
         price: '',
         stock: '',
         image: '',
-        category_id: null
+        category_id: null,
+        imageFile: null
       },
       showCreateModal: false,
       showEditModal: false,
-      isEdit: false
+      isEdit: false,
+      imagePreview: null
     };
   },
   methods: {
     async fetchProducts() {
-      const response = await axios.get('/admin/products');
-      this.products = response.data;
+      try {
+        const response = await axios.get('/admin/products');
+        console.log('Fetched products:', response.data);
+        this.products = response.data;
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      }
     },
     async fetchCategories() {
-      const response = await axios.get('/admin/categories');
-      this.categories = response.data;
+      try {
+        const response = await axios.get('/admin/categories');
+        console.log('Fetched categories:', response.data);
+        this.categories = response.data;
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
     },
     showCreateProduct() {
       this.form = {
@@ -92,35 +131,91 @@ export default {
         price: '',
         stock: '',
         image: '',
-        category_id: null
+        category_id: null,
+        imageFile: null
       };
+      this.imagePreview = null; // Reset preview
       this.showCreateModal = true;
       this.isEdit = false;
     },
     async submitForm() {
-      if (this.isEdit) {
-        await axios.put(`/admin/products/${this.form.id}`, this.form);
-      } else {
-        await axios.post('/admin/products', this.form);
+      let formData = new FormData();
+      formData.append('name', this.form.name);
+      formData.append('description', this.form.description);
+      formData.append('price', this.form.price);
+      formData.append('stock', this.form.stock);
+      if (this.form.imageFile) {
+        formData.append('image', this.form.imageFile);
       }
-      this.fetchProducts();
-      this.closeModal();
+      formData.append('category_id', this.form.category_id);
+
+      console.log('Form Data:', this.form); // Log the form data
+      console.log('Form Data Object:', formData); // Log the FormData object
+
+      try {
+        if (this.isEdit) {
+          console.log('Sending PUT request to:', `/admin/products/${this.form.id}`);
+          const response = await axios.put(`/admin/products/${this.form.id}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('PUT response:', response);
+        } else {
+          console.log('Sending POST request to:', '/admin/products');
+          const response = await axios.post('/admin/products', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('POST response:', response);
+        }
+        this.fetchProducts();
+        this.closeModal();
+      } catch (error) {
+        console.error('Error during submitForm:', error);
+        if (error.response) {
+          console.log('Error Response Data:', error.response.data);
+          console.log('Error Response Status:', error.response.status);
+          console.log('Error Response Headers:', error.response.headers);
+        } else if (error.request) {
+          console.log('Error Request:', error.request);
+        } else {
+          console.log('Error Message:', error.message);
+        }
+      }
     },
     async editProduct(id) {
-      const response = await axios.get(`/admin/products/${id}`);
-      this.form = response.data;
-      this.showCreateModal = true;
-      this.isEdit = true;
+      try {
+        const response = await axios.get(`/admin/products/${id}`);
+        console.log('Product data for edit:', response.data);
+        this.form = response.data;
+        this.imagePreview = this.form.image ? '/storage/images/' + this.form.image : null;
+        this.showCreateModal = true;
+        this.isEdit = true;
+      } catch (error) {
+        console.error('Error fetching product for edit:', error);
+      }
     },
     async deleteProduct(id) {
       if (confirm('Are you sure you want to delete this product?')) {
-        await axios.delete(`/admin/products/${id}`);
-        this.fetchProducts();
+        try {
+          await axios.delete(`/admin/products/${id}`);
+          this.fetchProducts();
+        } catch (error) {
+          console.error('Error deleting product:', error);
+        }
       }
     },
     closeModal() {
       this.showCreateModal = false;
       this.showEditModal = false;
+    },
+    handleFileUpload(event) {
+      this.form.imageFile = event.target.files[0];
+      if (this.form.imageFile) {
+        console.log('Selected file:', this.form.imageFile);
+        this.imagePreview = URL.createObjectURL(this.form.imageFile);
+      } else {
+        console.log('No file selected');
+        this.imagePreview = null;
+      }
     }
   },
   created() {
@@ -131,16 +226,17 @@ export default {
 </script>
 
 <style scoped>
+/* General Styles */
 .product-manager {
+  font-family: Arial, sans-serif;
   padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f5f5f5;
+  background-color: #f9f9f9;
 }
 
 .title {
   color: #333;
-  font-size: 26px;
   margin-bottom: 20px;
+  font-size: 2em;
 }
 
 .actions {
@@ -148,70 +244,64 @@ export default {
 }
 
 .btn {
-  padding: 12px 20px;
+  padding: 10px 15px;
   border: none;
   border-radius: 5px;
+  color: #fff;
+  font-size: 16px;
   cursor: pointer;
-  font-size: 14px;
-  margin-right: 10px;
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .btn-primary {
   background-color: #007bff;
-  color: white;
 }
 
 .btn-primary:hover {
   background-color: #0056b3;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .btn-edit {
-  background-color: #28a745;
-  color: white;
+  background-color: #ffc107;
 }
 
 .btn-edit:hover {
-  background-color: #218838;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  background-color: #e0a800;
 }
 
 .btn-delete {
   background-color: #dc3545;
-  color: white;
 }
 
 .btn-delete:hover {
   background-color: #c82333;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+.btn-cancel {
+  background-color: #6c757d; /* Light grey color */
+}
+
+.btn-cancel:hover {
+  background-color: #5a6268; /* Darker grey color */
+}
+
+/* Table Styles */
 .product-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
-  background-color: white;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.product-table th,
-.product-table td {
-  padding: 12px;
-  border: 1px solid #ddd;
+.product-table th, .product-table td {
+  padding: 10px;
   text-align: left;
+  border-bottom: 1px solid #ddd;
 }
 
 .product-table th {
-  background-color: #343a40;
-  color: white;
-  font-weight: bold;
+  background-color: #f4f4f4;
 }
 
-.product-table tbody tr:nth-child(even) {
-  background-color: #f2f2f2;
-}
-
+/* Modal Styles */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -225,12 +315,10 @@ export default {
 }
 
 .modal-content {
-  background: white;
-  padding: 30px;
+  background: #fff;
+  padding: 20px;
   border-radius: 8px;
   width: 500px;
-  max-width: 100%;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
 .modal-form {
@@ -238,22 +326,34 @@ export default {
   flex-direction: column;
 }
 
-.modal-form input,
-.modal-form textarea,
-.modal-form select {
+.form-group {
   margin-bottom: 15px;
-  padding: 12px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%;
+  padding: 8px;
   border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 14px;
+  border-radius: 4px;
 }
 
 .modal-buttons {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
-.modal-buttons button {
-  margin-left: 10px;
+.product-image {
+  width: 100px;
+  height: auto;
+}
+
+.product-image-preview {
+  width: 150px;
+  height: auto;
 }
 </style>
